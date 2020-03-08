@@ -23,6 +23,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -61,6 +62,7 @@ func (h *HTTP) Head(ctx context.Context, url goja.Value, args ...goja.Value) (*R
 
 // Post makes an HTTP POST request and returns a corresponding response by taking goja.Values as arguments
 func (h *HTTP) Post(ctx context.Context, url goja.Value, args ...goja.Value) (*Response, error) {
+	fmt.Println("js/modules/k6/http/request.go Post()")
 	return h.Request(ctx, HTTP_METHOD_POST, url, args...)
 }
 
@@ -87,6 +89,7 @@ func (h *HTTP) Options(ctx context.Context, url goja.Value, args ...goja.Value) 
 // Request makes an http request of the provided `method` and returns a corresponding response by
 // taking goja.Values as arguments
 func (h *HTTP) Request(ctx context.Context, method string, url goja.Value, args ...goja.Value) (*Response, error) {
+	fmt.Println("js/modules/k6/http/request.go Request()")
 	u, err := ToURL(url)
 	if err != nil {
 		return nil, err
@@ -119,6 +122,7 @@ func (h *HTTP) Request(ctx context.Context, method string, url goja.Value, args 
 func (h *HTTP) parseRequest(
 	ctx context.Context, method string, reqURL httpext.URL, body interface{}, params goja.Value,
 ) (*httpext.ParsedHTTPRequest, error) {
+	fmt.Println("js/modules/k6/http/request.go parseRequest()")
 	rt := common.GetRuntime(ctx)
 	state := lib.GetState(ctx)
 	if state == nil {
@@ -150,13 +154,30 @@ func (h *HTTP) parseRequest(
 	}
 
 	handleObjectBody := func(data map[string]interface{}) error {
+		fmt.Println("handleObjectBody")
+		fmt.Println(result.Req.Header)
 		if !requestContainsFile(data) {
-			bodyQuery := make(url.Values, len(data))
-			for k, v := range data {
-				bodyQuery.Set(k, formatFormVal(v))
+			fmt.Println("!requestContainsFile(data)")
+
+			contentType, ok := result.Req.Header["Content-Type"]
+			fmt.Println(contentType, ok)
+			if ok && contentType[0] == "application/json" {
+				fmt.Println("content type is application/json marshal json")
+				json, err := json.Marshal(data)
+				if err != nil {
+					return err
+				}
+				// fmt.Println(string(json))
+				result.Body = bytes.NewBufferString(string(json))
+			} else {
+				bodyQuery := make(url.Values, len(data))
+				for k, v := range data {
+					bodyQuery.Set(k, formatFormVal(v))
+				}
+				result.Body = bytes.NewBufferString(bodyQuery.Encode())
+				result.Req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			}
-			result.Body = bytes.NewBufferString(bodyQuery.Encode())
-			result.Req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
 			return nil
 		}
 
@@ -207,30 +228,6 @@ func (h *HTTP) parseRequest(
 
 		result.Req.Header.Set("Content-Type", mpw.FormDataContentType())
 		return nil
-	}
-
-	if body != nil {
-		switch data := body.(type) {
-		case map[string]goja.Value:
-			//TODO: fix forms submission and serialization in k6/html before fixing this..
-			newData := map[string]interface{}{}
-			for k, v := range data {
-				newData[k] = v.Export()
-			}
-			if err := handleObjectBody(newData); err != nil {
-				return nil, err
-			}
-		case map[string]interface{}:
-			if err := handleObjectBody(data); err != nil {
-				return nil, err
-			}
-		case string:
-			result.Body = bytes.NewBufferString(data)
-		case []byte:
-			result.Body = bytes.NewBuffer(data)
-		default:
-			return nil, fmt.Errorf("unknown request body type %T", body)
-		}
 	}
 
 	if userAgent := state.Options.UserAgent; userAgent.String != "" {
@@ -346,6 +343,34 @@ func (h *HTTP) parseRequest(
 				}
 				result.ResponseType = responseType
 			}
+		}
+	}
+	fmt.Println(result.Req.Header)
+
+	if body != nil {
+		fmt.Println("body != nil")
+		fmt.Println(body)
+		switch data := body.(type) {
+		case map[string]goja.Value:
+			//TODO: fix forms submission and serialization in k6/html before fixing this..
+			newData := map[string]interface{}{}
+			for k, v := range data {
+				newData[k] = v.Export()
+			}
+			if err := handleObjectBody(newData); err != nil {
+				return nil, err
+			}
+		case map[string]interface{}:
+			fmt.Println("case map string interface")
+			if err := handleObjectBody(data); err != nil {
+				return nil, err
+			}
+		case string:
+			result.Body = bytes.NewBufferString(data)
+		case []byte:
+			result.Body = bytes.NewBuffer(data)
+		default:
+			return nil, fmt.Errorf("unknown request body type %T", body)
 		}
 	}
 
