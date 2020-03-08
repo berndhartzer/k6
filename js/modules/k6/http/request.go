@@ -155,12 +155,10 @@ func (h *HTTP) parseRequest(
 
 	handleObjectBody := func(data map[string]interface{}) error {
 		fmt.Println("handleObjectBody")
-		fmt.Println(result.Req.Header)
+		// fmt.Println(result.Req.Header)
 		if !requestContainsFile(data) {
-			fmt.Println("!requestContainsFile(data)")
-
 			contentType, ok := result.Req.Header["Content-Type"]
-			fmt.Println(contentType, ok)
+			// fmt.Println(contentType, ok)
 			if ok && contentType[0] == "application/json" {
 				fmt.Println("content type is application/json marshal json")
 				json, err := json.Marshal(data)
@@ -345,7 +343,6 @@ func (h *HTTP) parseRequest(
 			}
 		}
 	}
-	fmt.Println(result.Req.Header)
 
 	if body != nil {
 		fmt.Println("body != nil")
@@ -377,6 +374,9 @@ func (h *HTTP) parseRequest(
 	if result.ActiveJar != nil {
 		httpext.SetRequestCookies(result.Req, result.ActiveJar, result.Cookies)
 	}
+
+	fmt.Println(result.Req.Header)
+	fmt.Println(result.Body)
 
 	return result, nil
 }
