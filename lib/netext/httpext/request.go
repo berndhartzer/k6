@@ -257,12 +257,20 @@ func MakeRequest(ctx context.Context, preq *ParsedHTTPRequest) (*Response, error
 		tags["iter"] = strconv.FormatInt(state.Iteration, 10)
 	}
 
+	start := time.Now()
+
 	// Check rate limit *after* we've prepared a request; no need to wait with that part.
 	if rpsLimit := state.RPSLimit; rpsLimit != nil {
+		// fmt.Println("non nil RPSLimit")
 		if err := rpsLimit.Wait(ctx); err != nil {
 			return nil, err
 		}
 	}
+
+	t := time.Now()
+	elapsed := t.Sub(start)
+	fmt.Println("post rpsLimit wait", elapsed)
+
 
 	tracerTransport := newTransport(ctx, state, tags)
 	var transport http.RoundTripper = tracerTransport
@@ -303,99 +311,99 @@ func MakeRequest(ctx context.Context, preq *ParsedHTTPRequest) (*Response, error
 					}
 					state.Logger.WithFields(logrus.Fields{"url": url.String()}).Warnf(
 						"Stopped after %d redirects and returned the redirection; pass { redirects: n }"+
-							" in request params or set global maxRedirects to silence this", l)
+						" in request params or set global maxRedirects to silence this", l)
+					}
+					return http.ErrUseLastResponse
 				}
-				return http.ErrUseLastResponse
+				return nil
+			},
+		}
+
+		reqCtx, cancelFunc := context.WithTimeout(ctx, preq.Timeout)
+		defer cancelFunc()
+		mreq := preq.Req.WithContext(reqCtx)
+		res, resErr := client.Do(mreq)
+
+		// TODO(imiric): It would be safer to check for a writeable
+		// response body here instead of status code, but those are
+		// wrapped in a read-only body when using client timeouts and are
+		// unusable until https://github.com/golang/go/issues/31391 is fixed.
+		if res != nil && res.StatusCode == http.StatusSwitchingProtocols {
+			_ = res.Body.Close()
+			return nil, fmt.Errorf("unsupported response status: %s", res.Status)
+		}
+
+		resp.Body, resErr = readResponseBody(state, preq.ResponseType, res, resErr)
+		finishedReq := tracerTransport.processLastSavedRequest(wrapDecompressionError(resErr))
+		if finishedReq != nil {
+			updateK6Response(resp, finishedReq)
+		}
+
+		if resErr == nil {
+			if preq.ActiveJar != nil {
+				if rc := res.Cookies(); len(rc) > 0 {
+					preq.ActiveJar.SetCookies(res.Request.URL, rc)
+				}
 			}
-			return nil
-		},
-	}
 
-	reqCtx, cancelFunc := context.WithTimeout(ctx, preq.Timeout)
-	defer cancelFunc()
-	mreq := preq.Req.WithContext(reqCtx)
-	res, resErr := client.Do(mreq)
+			resp.URL = res.Request.URL.String()
+			resp.Status = res.StatusCode
+			resp.Proto = res.Proto
 
-	// TODO(imiric): It would be safer to check for a writeable
-	// response body here instead of status code, but those are
-	// wrapped in a read-only body when using client timeouts and are
-	// unusable until https://github.com/golang/go/issues/31391 is fixed.
-	if res != nil && res.StatusCode == http.StatusSwitchingProtocols {
-		_ = res.Body.Close()
-		return nil, fmt.Errorf("unsupported response status: %s", res.Status)
-	}
+			if res.TLS != nil {
+				resp.setTLSInfo(res.TLS)
+			}
 
-	resp.Body, resErr = readResponseBody(state, preq.ResponseType, res, resErr)
-	finishedReq := tracerTransport.processLastSavedRequest(wrapDecompressionError(resErr))
-	if finishedReq != nil {
-		updateK6Response(resp, finishedReq)
-	}
+			resp.Headers = make(map[string]string, len(res.Header))
+			for k, vs := range res.Header {
+				resp.Headers[k] = strings.Join(vs, ", ")
+			}
 
-	if resErr == nil {
-		if preq.ActiveJar != nil {
-			if rc := res.Cookies(); len(rc) > 0 {
-				preq.ActiveJar.SetCookies(res.Request.URL, rc)
+			resCookies := res.Cookies()
+			resp.Cookies = make(map[string][]*HTTPCookie, len(resCookies))
+			for _, c := range resCookies {
+				resp.Cookies[c.Name] = append(resp.Cookies[c.Name], &HTTPCookie{
+					Name:     c.Name,
+					Value:    c.Value,
+					Domain:   c.Domain,
+					Path:     c.Path,
+					HTTPOnly: c.HttpOnly,
+					Secure:   c.Secure,
+					MaxAge:   c.MaxAge,
+					Expires:  c.Expires.UnixNano() / 1000000,
+				})
 			}
 		}
 
-		resp.URL = res.Request.URL.String()
-		resp.Status = res.StatusCode
-		resp.Proto = res.Proto
+		if resErr != nil {
+			// Do *not* log errors about the context being cancelled.
+			select {
+			case <-ctx.Done():
+			default:
+				state.Logger.WithField("error", resErr).Warn("Request Failed")
+			}
 
-		if res.TLS != nil {
-			resp.setTLSInfo(res.TLS)
+			if preq.Throw {
+				return nil, resErr
+			}
 		}
 
-		resp.Headers = make(map[string]string, len(res.Header))
-		for k, vs := range res.Header {
-			resp.Headers[k] = strings.Join(vs, ", ")
-		}
-
-		resCookies := res.Cookies()
-		resp.Cookies = make(map[string][]*HTTPCookie, len(resCookies))
-		for _, c := range resCookies {
-			resp.Cookies[c.Name] = append(resp.Cookies[c.Name], &HTTPCookie{
-				Name:     c.Name,
-				Value:    c.Value,
-				Domain:   c.Domain,
-				Path:     c.Path,
-				HTTPOnly: c.HttpOnly,
-				Secure:   c.Secure,
-				MaxAge:   c.MaxAge,
-				Expires:  c.Expires.UnixNano() / 1000000,
-			})
-		}
+		return resp, nil
 	}
 
-	if resErr != nil {
-		// Do *not* log errors about the context being cancelled.
-		select {
-		case <-ctx.Done():
-		default:
-			state.Logger.WithField("error", resErr).Warn("Request Failed")
+	// SetRequestCookies sets the cookies of the requests getting those cookies both from the jar and
+	// from the reqCookies map. The Replace field of the HTTPRequestCookie will be taken into account
+	func SetRequestCookies(req *http.Request, jar *cookiejar.Jar, reqCookies map[string]*HTTPRequestCookie) {
+		var replacedCookies = make(map[string]struct{})
+		for key, reqCookie := range reqCookies {
+			req.AddCookie(&http.Cookie{Name: key, Value: reqCookie.Value})
+			if reqCookie.Replace {
+				replacedCookies[key] = struct{}{}
+			}
 		}
-
-		if preq.Throw {
-			return nil, resErr
-		}
-	}
-
-	return resp, nil
-}
-
-// SetRequestCookies sets the cookies of the requests getting those cookies both from the jar and
-// from the reqCookies map. The Replace field of the HTTPRequestCookie will be taken into account
-func SetRequestCookies(req *http.Request, jar *cookiejar.Jar, reqCookies map[string]*HTTPRequestCookie) {
-	var replacedCookies = make(map[string]struct{})
-	for key, reqCookie := range reqCookies {
-		req.AddCookie(&http.Cookie{Name: key, Value: reqCookie.Value})
-		if reqCookie.Replace {
-			replacedCookies[key] = struct{}{}
+		for _, c := range jar.Cookies(req.URL) {
+			if _, ok := replacedCookies[c.Name]; !ok {
+				req.AddCookie(&http.Cookie{Name: c.Name, Value: c.Value})
+			}
 		}
 	}
-	for _, c := range jar.Cookies(req.URL) {
-		if _, ok := replacedCookies[c.Name]; !ok {
-			req.AddCookie(&http.Cookie{Name: c.Name, Value: c.Value})
-		}
-	}
-}

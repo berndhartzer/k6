@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
+
 	"github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v3"
 
@@ -73,6 +75,7 @@ type Engine struct {
 }
 
 func NewEngine(ex lib.Executor, o lib.Options) (*Engine, error) {
+	fmt.Println("core/engine.go NewEngine()")
 	if ex == nil {
 		ex = local.New(nil)
 	}
@@ -117,6 +120,7 @@ func (e *Engine) setRunStatus(status lib.RunStatus) {
 }
 
 func (e *Engine) Run(ctx context.Context) error {
+	// fmt.Println("core/engine.go Run()")
 	e.runLock.Lock()
 	defer e.runLock.Unlock()
 

@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	// "fmt"
+
 	"github.com/loadimpact/k6/lib/metrics"
 	"github.com/loadimpact/k6/stats"
 )
@@ -63,6 +65,8 @@ type Trail struct {
 
 // SaveSamples populates the Trail's sample slice so they're accesible via GetSamples()
 func (tr *Trail) SaveSamples(tags *stats.SampleTags) {
+	// fmt.Println("lib/netext/httpext/tracer.go SaveSamples()")
+	// fmt.Println(tr.Duration)
 	tr.Tags = tags
 	tr.Samples = []stats.Sample{
 		{Metric: metrics.HTTPReqs, Time: tr.EndTime, Tags: tags, Value: 1},

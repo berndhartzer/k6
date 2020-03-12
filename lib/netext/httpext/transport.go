@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"sync"
 
+	// "fmt"
+
 	"github.com/loadimpact/k6/lib"
 	"github.com/loadimpact/k6/lib/netext"
 	"github.com/loadimpact/k6/stats"
@@ -149,6 +151,9 @@ func (t *transport) measureAndEmitMetrics(unfReq *unfinishedRequest) *finishedRe
 		}
 	}
 
+	// fmt.Println("lib/netext/httpext/transport.go")
+	// fmt.Println(&tags)
+	// fmt.Println(trail)
 	trail.SaveSamples(stats.IntoSampleTags(&tags))
 	stats.PushIfNotDone(t.ctx, t.state.Samples, trail)
 
