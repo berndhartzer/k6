@@ -323,6 +323,8 @@ func MakeRequest(ctx context.Context, preq *ParsedHTTPRequest) (*Response, error
 		defer cancelFunc()
 		mreq := preq.Req.WithContext(reqCtx)
 		res, resErr := client.Do(mreq)
+		fmt.Println("lib/netext/httpext/request.go")
+		fmt.Println(res)
 
 		// TODO(imiric): It would be safer to check for a writeable
 		// response body here instead of status code, but those are

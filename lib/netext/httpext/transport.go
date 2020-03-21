@@ -209,5 +209,7 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		err:      err,
 	})
 
+	// fmt.Println("RoundTrip", resp)
+
 	return resp, err
 }
