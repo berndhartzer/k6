@@ -477,7 +477,13 @@ func (u *VU) runFn(
 	u.Iteration++
 
 	startTime := time.Now()
+	println("one here")
 	v, err := fn(goja.Undefined(), args...) // Actually run the JS script
+	println("two here")
+	if err != nil {
+		println("got this err")
+		println(err)
+	}
 	endTime := time.Now()
 
 	var isFullIteration bool

@@ -1486,6 +1486,7 @@ func AssertFunction(v Value) (Callable, bool) {
 						if ex, ok := x.(*InterruptedError); ok {
 							err = ex
 						} else {
+							println("goja pre panic")
 							panic(x)
 						}
 					}
