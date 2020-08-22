@@ -1,5 +1,4 @@
-/*
- *
+/* *
  * k6 - a next-generation load testing tool
  * Copyright (C) 2019 Load Impact
  *
@@ -96,6 +95,7 @@ type Response struct {
 	RemotePort     int                      `json:"remote_port"`
 	URL            string                   `json:"url"`
 	Status         int                      `json:"status"`
+	StatusText     string                   `json:"status_text"`
 	Proto          string                   `json:"proto"`
 	Headers        map[string]string        `json:"headers"`
 	Cookies        map[string][]*HTTPCookie `json:"cookies"`
@@ -126,6 +126,7 @@ func (res *Response) GetCtx() context.Context {
 
 // JSON parses the body of a response as json and returns it to the goja VM
 func (res *Response) JSON(selector ...string) (interface{}, error) {
+	fmt.Println("lib/netext/httpext/response.go JSON")
 	hasSelector := len(selector) > 0
 	if res.cachedJSON == nil || hasSelector {
 		var v interface{}

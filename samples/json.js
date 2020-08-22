@@ -12,6 +12,7 @@ export default function() {
     // Verify response
     check(res, {
         "status is 200": (r) => r.status === 200,
+        "status text is '200 OK'": (r) => r.status_text === "200 OK",
         "is key correct": (r) => j.json.key === "value",
     });
 }
