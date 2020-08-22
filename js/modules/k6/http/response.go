@@ -39,15 +39,12 @@ type Response struct {
 }
 
 func responseFromHttpext(resp *httpext.Response) *Response {
-	// fmt.Println("responseFromHttpext", resp)
 	res := Response{resp}
-	fmt.Println("responseFromHttpext", res.StatusText)
 	return &res
 }
 
 // JSON parses the body of a response as json and returns it to the goja VM
 func (res *Response) JSON(selector ...string) goja.Value {
-	fmt.Println("js/modules/k6/http/response.go JSON")
 	v, err := res.Response.JSON(selector...)
 	if err != nil {
 		common.Throw(common.GetRuntime(res.GetCtx()), err)

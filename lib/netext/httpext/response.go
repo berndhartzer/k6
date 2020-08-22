@@ -1,4 +1,4 @@
-/* *
+/*
  * k6 - a next-generation load testing tool
  * Copyright (C) 2019 Load Impact
  *
@@ -126,7 +126,6 @@ func (res *Response) GetCtx() context.Context {
 
 // JSON parses the body of a response as json and returns it to the goja VM
 func (res *Response) JSON(selector ...string) (interface{}, error) {
-	fmt.Println("lib/netext/httpext/response.go JSON")
 	hasSelector := len(selector) > 0
 	if res.cachedJSON == nil || hasSelector {
 		var v interface{}

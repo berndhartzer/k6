@@ -174,7 +174,6 @@ func updateK6Response(k6Response *Response, finishedReq *finishedRequest) {
 
 // MakeRequest makes http request for tor the provided ParsedHTTPRequest
 func MakeRequest(ctx context.Context, preq *ParsedHTTPRequest) (*Response, error) {
-	fmt.Println("lib/netext/httpext/request.go MakeRequest")
 	state := lib.GetState(ctx)
 
 	respReq := &Request{
@@ -372,9 +371,6 @@ func MakeRequest(ctx context.Context, preq *ParsedHTTPRequest) (*Response, error
 			state.Logger.WithField("error", resErr).Warn("Request Failed")
 		}
 	}
-
-	// fmt.Println("second initial")
-	// fmt.Println(resp.StatusText)
 
 	return resp, nil
 }

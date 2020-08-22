@@ -113,9 +113,6 @@ func (h *HTTP) Request(ctx context.Context, method string, url goja.Value, args 
 		return nil, err
 	}
 
-	thing := responseFromHttpext(resp)
-	fmt.Println("js/modules/k6/http/request.go Request", thing.StatusText)
-
 	return responseFromHttpext(resp), nil
 }
 
