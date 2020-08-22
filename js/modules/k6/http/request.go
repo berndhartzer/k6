@@ -112,7 +112,6 @@ func (h *HTTP) Request(ctx context.Context, method string, url goja.Value, args 
 	if err != nil {
 		return nil, err
 	}
-
 	return responseFromHttpext(resp), nil
 }
 
